@@ -1,18 +1,23 @@
 module Brainfuck.Brainfuck where
 
 import Data.Char
+import Data.Maybe
 import Control.Monad.RWS
+import System.IO
 import Prelude hiding ((+), (-), (>), (<), (*), init)
 
-type Pointer = Int
-type Cells   = [Int]
+type IP  = Int
+type BP  = Int
 
-type State   = RWST () () (Pointer, Cells) IO ()
+data Code = Code [State]
+type Cells = [Int]
+
+type State   = RWST () () (IP, BP, Code, Cells) IO ()
 
 (+), (-) :: State
 [(+), (-)] = map (modify . change) [succ, pred]
     where
-        change f (p, cs) = (p, css)
+        change f (ip, p, code, cs) = (ip, p, code, css)
             where
                 css = fst a ++ (f . head $ fst b) : (snd b)
                 a = splitAt p cs
@@ -21,19 +26,43 @@ type State   = RWST () () (Pointer, Cells) IO ()
 (>), (<) :: State
 [(>), (<)] = map (modify . fwd) [succ, pred]
     where
-        fwd f (p, cs) = (f p, cs)
+        fwd f (ip, p, code, cs) = (ip, f p, code, cs)
+
+(#) :: State
+(#) = do
+    c <- liftIO $ fmap ord getChar
+    modify $ readChar c
+    where
+        readChar c (ip, p, code, cs) = (ip, p, code, css)
+            where
+                css = fst a ++ c : (snd b)
+                a = splitAt p cs
+                b = splitAt 1 $ snd a
 
 (*) :: State
 (*) = do
-    (p, cs) <- get
+    (ip, p, code, cs) <- get
     liftIO $ putChar $ chr $ cs !! p
 
-showState :: State
+trFunc = fromJust . flip lookup [
+        ('+',(+)),
+        ('-',(-)),
+        ('>',(>)),
+        ('<',(<)),
+        ('.',(*)),
+        (',',(#))
+    ]
+
+{-showState :: State
 showState = do
-    (p, cs) <- get
-    liftIO $ print (p, cs)
+    (ip, p, code, cs) <- get
+    liftIO $ print (ip, p, code, cs)-}
 
 init :: State
-init = put (1, take 100 [0,0..])
+init = do
+    liftIO $ hSetBuffering stdin NoBuffering
+    liftIO $ hSetBuffering stdout NoBuffering
+    put (1, 1, Code [], take 100 [0,0..])
 
-runCode code = runRWST (foldr1 (>>) code) () (0, [])
+run code = runRWST (mapM_ id $ init : code) () (0, 0, Code [], [])
+run' code' = runRWST (mapM_ id $ init : map trFunc code') () (0, 0, Code [], [])
