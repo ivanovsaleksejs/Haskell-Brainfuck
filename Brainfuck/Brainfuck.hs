@@ -65,4 +65,4 @@ init = do
     put (1, 1, Code [], take 100 [0,0..])
 
 run code = runRWST (mapM_ id $ init : code) () (0, 0, Code [], [])
-run' code' = runRWST (mapM_ id $ init : map trFunc code') () (0, 0, Code [], [])
+run' = run . map trFunc
